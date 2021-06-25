@@ -1,0 +1,555 @@
+
+<!DOCTYPE html>
+
+
+<head>
+  <meta charset="utf-8">
+  <title>Final project 2 (D3)</title>
+</head>
+
+<!-- Load d3.js -->
+<script src="https://d3js.org/d3.v4.js"></script>
+
+<!-- Color palette -->
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+
+<!-- Create a div where the graph will take place -->
+
+<body style = "background-image: url('https://cdn.wallpapersafari.com/63/84/LkSrqU.jpeg')";>
+
+  <h1><center>IGR204 - Data Viz Project : Carbon footprint by country</center></h1>
+  <h2><center>What do you want to visualize on the right graph ?</center></h2>
+
+  <div><center>
+  <input type="radio" id="kt_co2" name="radio_button" value="kt_co2"
+          checked>
+  <label for="kt_co2">Carbon footprint per country (Kt of co2)</label></center>
+
+  </div>
+  <div>
+    <center>
+    <input type="radio" id="kt_co2_gdp" name="radio_button" value="kt_co2_gdp">
+    <label for="kt_co2_gdp">Carbon footprint per country per GDP (Kt of co2 / GDP)</label></center>
+    </div>
+
+  <div><center>
+  <input type="radio" id="kt_co2_capita" name="radio_button" value="kt_co2_capita">
+  <label for="kt_co2_capita">Carbon footprint per country per Capita (Kt of co2 / Capita)</label></center>
+  </div>
+  
+  <script src="https://unpkg.com/d3-simple-slider"></script>
+  <h2>Choose a year :</h2>
+  <div class="row align-items-center">
+    <div class="col-sm-2"><p id="value-time"></p></div>
+    <div class="col-sm"><div id="slider-time"></div></div>
+  </div>
+</body>
+
+
+
+<div id="my_dataviz"></div>
+
+
+<script>
+
+// set the dimensions and margins of the graph
+var width = 900
+var height = 480
+
+// append the svg object to the body of the page
+var svg = d3.select("#my_dataviz")
+  .append("svg")
+    .attr("width", width)
+    .attr("height", height)
+
+var svg2 = d3.select("#my_dataviz")
+  .append("svg")
+    .attr("width", width-20)
+    .attr("height", height)
+
+
+//Radio button to select either : kt_co2, k_co2 per Capita or k_co2 per GDP
+
+let value_rb = d3.select('input[name="radio_button"]:checked').node().value;
+
+//filtre Kt_co2 :
+const value_filter = 60000;
+const value_filter_capita = 25;
+const value_filter_gdp = 2.5;
+
+
+// Read data
+//data/df_co2_melt.csv
+
+d3.csv("data/df_co2_melt_FULL3.csv", function(data) {
+
+  //correcting each data type :
+  data.forEach(function(d){ d['value'] = +d['value']; });
+  data.forEach(function(d){ d['value_capita'] = +d['value_capita']; });
+  data.forEach(function(d){ d['value_gdp'] = +d['value_gdp']; });
+  data.forEach(function(d){ d['year'] = +d['year']; });
+  data.forEach(function(d){ d['key'] = d['key']; });
+  data.forEach(function(d){ d['continent'] = d['continent']; });
+
+  //checking values : O
+  console.log("HELLO WORLD");
+  console.log(data[0]);
+  console.log(data[1]);
+  console.log(value_rb);
+
+  // Filter a bit the data -> show only countries with more than 1.500.000 Kt of co2
+  data = data.filter(function(d){ return (d.value>value_filter || d.value_capita>value_filter_capita || d.value_gdp>value_filter_gdp) });
+  
+  data2 = data;
+
+   //getting the radio button value on change :
+   d3.selectAll("input[name='radio_button']").on("change", function(){
+    value_rb = this.value;
+
+    data2 = data.filter(function(d){ return d.year==selected_year})
+
+    svg.select('g').remove();
+    svg.select('g').remove();
+    svg2.select('g').remove();
+    svg2.select('g').remove();
+
+    //dynamic update :
+    update(data2);
+    
+      });
+
+  var year_min = d3.min(data, function(d) { return d.year; })
+  var year_max = d3.max(data, function(d) { return d.year; })
+  //Slider for the year :
+  var dataTime = d3.range(0, year_max-year_min).map(function(d) {
+    return new Date(year_min + d, year_max-year_min, 3);
+  });
+
+  var selected_year = d3.timeFormat('%Y')(d3.min(dataTime));
+
+
+  var sliderTime = d3
+    .sliderBottom()
+    .min(d3.min(dataTime))
+    .max(d3.max(dataTime))
+    .step(1000 * 60 * 60 * 24 * 365)
+    .width(300)
+    .tickFormat(d3.timeFormat('%Y'))
+    .ticks(10)
+    .default(new Date(year_min, 10, 10))
+    //On slider change :
+    .on('onchange', val => {
+      selected_year=d3.timeFormat('%Y')(val)
+      d3.select('p#value-time').text(d3.timeFormat('%Y')(val))
+      data2 = data.filter(function(d){ return d.year==selected_year})
+
+      svg.select('g').remove();
+      svg.select('g').remove();
+      svg2.select('g').remove();
+      svg2.select('g').remove();
+
+      //dynamic update :
+      update(data2);
+
+    });
+  
+  var gTime = d3
+    .select('div#slider-time')
+    .append('svg')
+    .attr('width', 1000)
+    .attr('height', 100)
+    .append('g')
+    .attr('transform', 'translate(30,10)');
+
+  gTime.call(sliderTime);
+  d3.select('p#value-time').text(d3.timeFormat('%Y')(sliderTime.value()));
+
+  
+  // Color palette for continents?
+  var color = d3.scaleOrdinal()
+    .domain(["Middle East", "North America", "Europe", "South America", "Africa", "Asia","Oceania"])
+    .range(d3.schemeSet1);
+
+  //handmade legend :
+  // Handmade legend
+  svg2.append("text").attr("x", 5).attr("y", 30).text("Legend").style("font-size", "30px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",80).attr("r", 8).style("fill", "green")
+  svg2.append("text").attr("x", 30).attr("y", 80).text("Europe").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",110).attr("r", 8).style("fill", "blue")
+  svg2.append("text").attr("x", 30).attr("y", 110).text("North America").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",150).attr("r", 8).style("fill", "purple")
+  svg2.append("text").attr("x", 30).attr("y", 150).text("South America").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",180).attr("r", 8).style("fill", "yellow")
+  svg2.append("text").attr("x", 30).attr("y", 180).text("Asia").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",210).attr("r", 8).style("fill", "red")
+  svg2.append("text").attr("x", 30).attr("y", 210).text("Middle East").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",240).attr("r", 8).style("fill", "brown")
+  svg2.append("text").attr("x", 30).attr("y", 240).text("Oceania").style("font-size", "20px").attr("alignment-baseline","middle")
+  svg2.append("circle").attr("cx",10).attr("cy",270).attr("r", 8).style("fill", "orange")
+  svg2.append("text").attr("x", 30).attr("y", 270).text("Africa").style("font-size", "20px").attr("alignment-baseline","middle")
+
+  // Size scale for countries
+  var size1 = d3.scaleSqrt()
+    .domain([0, 5000000])
+    .range([11,70])
+    
+  var size2 = d3.scaleSqrt()
+    .domain([0, 70])
+    .range([11,70])
+
+  var size3 = d3.scaleSqrt()
+    .domain([0, 7])
+    .range([11,70])
+
+  // create a tooltip
+  var Tooltip = d3.select("#my_dataviz")
+    .append("div")
+    .style("opacity", 0)
+    .attr("class", "tooltip")
+    .style("background-color", "white")
+    .style("border", "solid")
+    .style("border-width", "2px")
+    .style("border-radius", "5px")
+    .style("padding", "5px")
+
+  // Three function that change the tooltip when user hover / move / leave a cell
+  var mouseover = function(d) {
+    Tooltip
+      .style("opacity", 1)
+  }
+  var mousemove1 = function(d) {
+    Tooltip
+      .html('<u>' + d.key + '</u>' + "<br>" + d3.format(".0f")(d.value) + " KiloTons of Co2, Year:" + d.year)
+      .style("left", (d3.mouse(this)[0]+20) + "px")
+      .style("top", (d3.mouse(this)[1]) + "px")
+  }
+
+  var mousemove2 = function(d) {
+    var value_display = d.value
+    var text_display = "KiloTons of Co2"
+    if (value_rb == 'kt_co2') {value_display= d3.format(".0f")(d.value)
+      text_display = "KiloTons of Co2"}
+    if (value_rb == 'kt_co2_capita') {value_display=d3.format(".2f")(d.value_capita)
+      text_display = "KiloTons of Co2 per capita"}
+    if (value_rb == 'kt_co2_gdp') {value_display=d3.format(".2f")(d.value_gdp)
+      text_display = "KiloTons of Co2 per gdp"}
+
+    Tooltip
+      .html('<u>' + d.key + '</u>' + "<br>" + value_display + " " + text_display + ", Year:" + d.year)
+      .style("left", (d3.mouse(this)[0]+20) + "px")
+      .style("top", (d3.mouse(this)[1]) + "px")
+  }
+
+  var mouseleave = function(d) {
+    Tooltip
+      .style("opacity", 0)
+  }
+  
+  // Initialize the circle: all located at the center of the svg area
+  //SVG n°1 :
+  var node = svg.append("g")
+        .selectAll("circle")
+        .data(data2)
+        .enter()
+        .append("circle")
+          .filter(function(d){ return d.year==selected_year})
+          .attr("class", "node")
+          .attr("r", function(d){ return size1(d.value)}) //d.Kt_co2
+          .attr("cx", width / 2)
+          .attr("cy", height / 2)
+          .style("fill", function(d){ return color(d.continent)}) //d.region
+          .style("fill-opacity", 0.8)
+          .attr("stroke", "black")
+          .style("stroke-width", 1)
+          .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove1)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+
+    var texte = svg.append("g")
+        .selectAll("text")
+        .data(data2)
+        .enter()
+        .append('text')
+        .filter(function(d){ return d.year==selected_year})
+        .attr("x",  width / 2)
+        .attr("y", height / 2)
+        .attr("dy", ".3em")
+        .style("text-anchor", "middle")
+        .text(function(d) {return d.key})
+        .style("font-size", function(d){ return Math.log(size1(d.value)*10000)})
+        .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove1)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+
+  //SVG n°2 :
+  var node2 = svg2.append("g")
+        .selectAll("circle")
+        .data(data2)
+        .enter()
+        .append("circle")
+          .filter(function(d){ return d.year==selected_year})
+          .attr("class", "node")
+          .attr("r", function(d){
+            console.log(value_rb);
+            if (value_rb == 'kt_co2') {return size1(d.value)}
+            if (value_rb == 'kt_co2_capita') {return size2(d.value_capita)}
+            if (value_rb == 'kt_co2_gdp') {return size3(d.value_gdp)}
+          })
+          .attr("cx", width / 2)
+          .attr("cy", height / 2)
+          .style("fill", function(d){ return color(d.continent)}) //d.region
+          .style("fill-opacity", 0.8)
+          .attr("stroke", "black")
+          .style("stroke-width", 1)
+          .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove2)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+
+    var texte2 = svg2.append("g")
+        .selectAll("text")
+        .data(data2)
+        .enter()
+        .append('text')
+        .filter(function(d){ return d.year==selected_year})
+        .attr("x",  width / 2)
+        .attr("y", height / 2)
+        .attr("dy", ".3em")
+        .style("text-anchor", "middle")
+        .text(function(d) {return d.key})
+        .style("font-size", function(d){
+          
+          if (value_rb == 'kt_co2') {return Math.log(size1(d.value)*10000)}
+          if (value_rb == 'kt_co2_capita') {return Math.log(size2(d.value_capita)*10000)}
+          if (value_rb == 'kt_co2_gdp') {return Math.log(size3(d.value_gdp)*10000)}
+        })
+        .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove2)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+
+
+
+  // Features of the forces applied to the nodes:
+  var simulation = d3.forceSimulation()
+      .force("forceX", d3.forceX().strength(.17).x(width * .5))
+      .force("forceY", d3.forceY().strength(.17).y(height * .5))
+      .force("center", d3.forceCenter().x(width / 2).y(height / 2)) // Attraction to the center of the svg area
+      .force("charge", d3.forceManyBody().strength(-15)) // Nodes are attracted one each other of value is > 0
+      .force("collide", d3.forceCollide().strength(0.1).radius(function(d){ return (size1(d.value)+3) }).iterations(1)) // Force that avoids circle overlapping
+
+  // Apply these forces to the nodes and update their positions.
+  // Once the force algorithm is happy with positions ('alpha' value is low enough), simulations will stop.
+  simulation
+      .nodes(data)
+      .on("tick", function(d){
+        node
+            .attr("cx", function(d){ return d.x; })
+            .attr("cy", function(d){ return d.y; })
+        texte
+          .attr("x", function(d){ return d.x; })
+          .attr("y", function(d){ return d.y; })
+        node2
+            .attr("cx", function(d){ return d.x; })
+            .attr("cy", function(d){ return d.y; })
+        texte2
+          .attr("x", function(d){ return d.x; })
+          .attr("y", function(d){ return d.y; })
+      });
+
+  
+  // What happens when a circle is dragged?
+  function dragstarted(d) {
+    if (!d3.event.active) simulation.alphaTarget(.03).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+  function dragged(d) {
+    d.fx = d3.event.x;
+    d.fy = d3.event.y;
+  }
+  function dragended(d) {
+    if (!d3.event.active) simulation.alphaTarget(.03);
+    d.fx = null;
+    d.fy = null;
+  }
+
+
+
+  //Fonction update :
+  function update(data2){
+
+    function dragstarted(d) {
+      if (!d3.event.active){simulation1.alphaTarget(.03).restart()
+      simulation2.alphaTarget(.03).restart()};
+      d.fx = d.x;
+      d.fy = d.y;
+            }
+      function dragged(d) {
+          d.fx = d3.event.x;
+          d.fy = d3.event.y;
+        }
+      function dragended(d) {
+            if (!d3.event.active){simulation1.alphaTarget(.03)
+            simulation2.alphaTarget(.03)};
+            d.fx = null;
+            d.fy = null;
+          }
+
+      var node = svg.append("g")
+        .selectAll("circle")
+        .data(data2)
+        .enter()
+        .append("circle")
+          .attr("class", "node")
+          .attr("r", function(d){
+            return size1(d.value)
+          })
+          .attr("cx", width / 2)
+          .attr("cy", height / 2)
+          .style("fill", function(d){ return color(d.continent)}) //d.region
+          .style("fill-opacity", 0.8)
+          .attr("stroke", "black")
+          .style("stroke-width", 1)
+          .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove1)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+      
+      var texte = svg.append("g")
+        .selectAll("text")
+        .data(data2)
+        .enter()
+        .append('text')
+        .filter(function(d){ return d.year==selected_year})
+        .attr("x",  width / 2)
+        .attr("y", height / 2)
+        .attr("dy", ".3em")
+        .style("text-anchor", "middle")
+        .text(function(d) {return d.key})
+        .style("font-size", function(d){
+          return Math.log(size1(d.value)*10000)
+          })
+        .on("mouseover", mouseover) // What to do when hovered
+        .on("mousemove", mousemove1)
+        .on("mouseleave", mouseleave)
+        .call(d3.drag() // call specific function when circle is dragged
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+      var node2 = svg2.append("g")
+        .selectAll("circle")
+        .data(data2)
+        .enter()
+        .append("circle")
+          .attr("class", "node")
+          .attr("r", function(d){
+            if (value_rb == 'kt_co2') {return size1(d.value)}
+            if (value_rb == 'kt_co2_capita') {return size2(d.value_capita)}
+            if (value_rb == 'kt_co2_gdp') {return size3(d.value_gdp)}
+          })
+          .attr("cx", width / 2)
+          .attr("cy", height / 2)
+          .style("fill", function(d){ return color(d.continent)}) //d.region
+          .style("fill-opacity", 0.8)
+          .attr("stroke", "black")
+          .style("stroke-width", 1)
+          .on("mouseover", mouseover) // What to do when hovered
+          .on("mousemove", mousemove2)
+          .on("mouseleave", mouseleave)
+          .call(d3.drag() // call specific function when circle is dragged
+              .on("start", dragstarted)
+              .on("drag", dragged)
+              .on("end", dragended));
+      
+      var texte2 = svg2.append("g")
+        .selectAll("text")
+        .data(data2)
+        .enter()
+        .append('text')
+        .filter(function(d){ return d.year==selected_year})
+        .attr("x",  width / 2)
+        .attr("y", height / 2)
+        .attr("dy", ".3em")
+        .style("text-anchor", "middle")
+        .text(function(d) {return d.key})
+        .style("font-size", function(d){
+          if (value_rb == 'kt_co2') {return Math.log(size1(d.value)*10000)}
+          if (value_rb == 'kt_co2_capita') {return Math.log(size2(d.value_capita)*10000)}
+          if (value_rb == 'kt_co2_gdp') {return Math.log(size3(d.value_gdp)*10000)}
+        })
+        .on("mouseover", mouseover) // What to do when hovered
+        .on("mousemove", mousemove2)
+        .on("mouseleave", mouseleave)
+        .call(d3.drag() // call specific function when circle is dragged
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended));
+
+        //simulation :
+        // Features of the forces applied to the nodes:
+        var simulation1 = d3.forceSimulation()
+            .force("forceX", d3.forceX().strength(.17).x(width * .5))
+            .force("forceY", d3.forceY().strength(.17).y(height * .5))
+            .force("center", d3.forceCenter().x(width / 2).y(height / 2)) // Attraction to the center of the svg area
+            .force("charge", d3.forceManyBody().strength(-70)) // Nodes are attracted one each other of value is > 0
+            .force("collide", d3.forceCollide().strength(1).radius(function(d){return (size1(d.value)+3)}).iterations(2)) // Force that avoids circle overlapping
+
+        var simulation2 = d3.forceSimulation()
+            .force("forceX", d3.forceX().strength(.17).x(width * .5))
+            .force("forceY", d3.forceY().strength(.17).y(height * .5))
+            .force("center", d3.forceCenter().x(width / 2).y(height / 2)) // Attraction to the center of the svg area
+            .force("charge", d3.forceManyBody().strength(-70)) // Nodes are attracted one each other of value is > 0
+            .force("collide", d3.forceCollide().strength(1).radius(function(d){ 
+              if (value_rb == 'kt_co2') {return (size1(d.value)+3)}
+              if (value_rb == 'kt_co2_capita') {return (size2(d.value_capita)+3)}
+              if (value_rb == 'kt_co2_gdp') {return (size3(d.value_gdp)+3)}
+            }).iterations(2)) // Force that avoids circle overlapping
+
+        // Apply these forces to the nodes and update their positions.
+        // Once the force algorithm is happy with positions ('alpha' value is low enough), simulations will stop.
+        simulation1
+            .nodes(data2)
+            .on("tick", function(d){
+              node
+                  .attr("cx", function(d){ return d.x; })
+                  .attr("cy", function(d){ return d.y; })
+              texte
+                  .attr("x", function(d){ return d.x; })
+                  .attr("y", function(d){ return d.y; })
+            });
+
+        simulation2
+            .nodes(data2)
+            .on("tick", function(d){
+              node2
+                  .attr("cx", function(d){ return d.x; })
+                  .attr("cy", function(d){ return d.y; })
+              texte2
+                  .attr("x", function(d){ return d.x; })
+                  .attr("y", function(d){ return d.y; })
+
+            });
+  }
+
+})
+
+</script>
