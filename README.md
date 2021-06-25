@@ -9,7 +9,8 @@ Metrics :
 Interaction :
 - Time slider
 - Radio button to chose metric (for right graph only, the left graph will always display the 1st metric)
-- ForceSimulation d3 library
+- Tooltip to display values
+- ForceSimulation d3 library : for more interaction and getting insights
 
 Example :
 
